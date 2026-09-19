@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("id")
+    .select("id, slug, infinitepay_handle")
     .eq("slug", body.tenantSlug)
     .neq("subscription_status", "canceled")
     .maybeSingle();
@@ -82,23 +82,44 @@ export async function POST(request: NextRequest) {
     })
   );
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin;
   const paymentProvider = getPaymentProvider();
-  const charge = await paymentProvider.createCharge({
-    orderId: order.id,
-    amountCents: totalCents,
-    currency: "BRL",
-    customerEmail: body.customerEmail,
-    description: `Pedido ${order.id}`,
-  });
 
+  let charge;
+  try {
+    charge = await paymentProvider.createCharge({
+      orderId: order.id,
+      amountCents: totalCents,
+      currency: "BRL",
+      customerEmail: body.customerEmail,
+      description: `Pedido ${order.id}`,
+      merchantAccountId: tenant.infinitepay_handle,
+      webhookUrl: `${appUrl}/api/webhooks/${paymentProvider.name}`,
+      redirectUrl: `${appUrl}/loja/${tenant.slug}/pedido/${order.id}`,
+    });
+  } catch {
+    await supabase.from("orders").update({ status: "canceled" }).eq("id", order.id);
+    return NextResponse.json(
+      { error: "Não foi possível iniciar o pagamento desta loja." },
+      { status: 502 }
+    );
+  }
+
+  // "authorized" (mock) já resolve na hora; "pending" com checkoutUrl
+  // (InfinitePay) só vira "paid" quando o webhook confirmar via
+  // confirmCharge() — nunca aqui, de forma otimista.
   await supabase
     .from("orders")
     .update({
-      status: charge.status === "authorized" ? "paid" : "canceled",
+      status: charge.status === "authorized" ? "paid" : charge.status === "declined" ? "canceled" : "pending",
       payment_provider: paymentProvider.name,
       payment_reference: charge.providerReference,
     })
     .eq("id", order.id);
 
-  return NextResponse.json({ orderId: order.id, status: charge.status });
+  return NextResponse.json({
+    orderId: order.id,
+    status: charge.status,
+    checkoutUrl: charge.checkoutUrl ?? null,
+  });
 }

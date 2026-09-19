@@ -37,12 +37,20 @@ export default async function AdminDashboard() {
                 </Link>
               </p>
             </div>
-            <Link
-              href={`/admin/produtos?tenant=${tenant.id}`}
-              className="rounded bg-brand-accent px-3 py-1.5 text-sm text-white hover:bg-brand-accentSoft"
-            >
-              Produtos
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href={`/admin/pagamento?tenant=${tenant.id}`}
+                className="rounded border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
+              >
+                Pagamento
+              </Link>
+              <Link
+                href={`/admin/produtos?tenant=${tenant.id}`}
+                className="rounded bg-brand-accent px-3 py-1.5 text-sm text-white hover:bg-brand-accentSoft"
+              >
+                Produtos
+              </Link>
+            </div>
           </li>
         ))}
       </ul>

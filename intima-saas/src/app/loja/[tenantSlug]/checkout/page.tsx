@@ -12,6 +12,7 @@ export default function CheckoutPage({ params }: { params: { tenantSlug: string 
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setItems(readCart(params.tenantSlug));
@@ -37,14 +38,27 @@ export default function CheckoutPage({ params }: { params: { tenantSlug: string 
         }),
       });
 
-      if (!response.ok) throw new Error("checkout failed");
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error ?? "checkout failed");
+      }
 
       const data = await response.json();
-      setOrderId(data.orderId);
       clearCart(params.tenantSlug);
+
+      // Providers como InfinitePay resolvem o pagamento numa página
+      // hospedada por eles (Pix/cartão) — o cliente sai do nosso site e
+      // só volta depois de pagar, no redirectUrl que já configuramos.
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      setOrderId(data.orderId);
       setStatus("done");
-    } catch {
+    } catch (err) {
       setStatus("error");
+      setErrorMessage(err instanceof Error ? err.message : "Erro desconhecido.");
     }
   }
 
@@ -93,7 +107,7 @@ export default function CheckoutPage({ params }: { params: { tenantSlug: string 
 
         {status === "error" && (
           <p className="text-sm text-red-400">
-            Não foi possível concluir o pedido. Tente novamente.
+            {errorMessage ?? "Não foi possível concluir o pedido. Tente novamente."}
           </p>
         )}
       </form>

@@ -1,8 +1,13 @@
-import type { PaymentChargeRequest, PaymentChargeResult, PaymentProvider } from "./types";
+import type {
+  PaymentChargeRequest,
+  PaymentChargeResult,
+  PaymentConfirmation,
+  PaymentProvider,
+} from "./types";
 
-// Provider de sandbox: sempre autoriza, nunca move dinheiro de verdade.
-// Existe para permitir testar o fluxo completo de checkout (carrinho →
-// pedido → confirmação) antes de haver contrato com uma processadora real.
+// Provider de sandbox: sempre autoriza na hora, sem redirecionamento e sem
+// mover dinheiro de verdade. Existe para testar o fluxo completo de
+// checkout antes de haver contrato com uma processadora real.
 export class MockPaymentProvider implements PaymentProvider {
   readonly name = "mock";
 
@@ -13,7 +18,11 @@ export class MockPaymentProvider implements PaymentProvider {
     };
   }
 
-  verifyWebhookSignature(): boolean {
-    return true;
+  async confirmCharge(orderId: string): Promise<PaymentConfirmation> {
+    return {
+      paid: true,
+      paidAmountCents: null,
+      providerReference: `mock_confirm_${orderId}`,
+    };
   }
 }

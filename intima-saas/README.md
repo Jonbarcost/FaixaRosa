@@ -26,10 +26,12 @@ Pesquisa feita antes de decidir a arquitetura:
   que aprovar uma adquirente de alto risco é um processo de negócio
   (KYC, contrato, CNPJ) — não algo que se resolve só escrevendo código.
 
-Por isso a v1 do checkout roda com `PAYMENT_PROVIDER=mock` (sandbox, não
-move dinheiro real) — ver `src/lib/payments/README.md`. A interface já é
-plugável para não exigir reescrever o checkout quando o contrato real
-existir.
+A v1 do checkout suporta dois providers: `mock` (sandbox, não move
+dinheiro) e `infinitepay` (Checkout Integrado real — Pix e cartão). Não
+encontrei nos Termos de Uso públicos da InfinitePay uma lista de
+categorias proibidas nem confirmação de que aceitam sexshop — ver
+`src/lib/payments/README.md` para o detalhe e a recomendação de confirmar
+direto com o suporte deles antes de depender só disso.
 
 ## Arquitetura
 
@@ -46,6 +48,14 @@ existir.
   `tenant_user`, então a escrita de pedido roda em `/api/checkout` com a
   service role key (nunca exposta ao navegador), recalculando o preço a
   partir do banco — nunca confia no valor mandado pelo cliente.
+- **Cada lojista recebe na própria conta InfinitePay**: o handle
+  (`tenants.infinitepay_handle`, configurado em `/admin/pagamento`) é do
+  lojista, não da plataforma — o dinheiro nunca passa pela conta do SaaS.
+  Evita que a plataforma precise de autorização do Bacen para operar como
+  instituição de pagamento. O webhook de confirmação
+  (`/api/webhooks/infinitepay`) nunca confia no próprio payload: sempre
+  reconsulta a transação na API da InfinitePay antes de marcar um pedido
+  como pago (ver `src/lib/payments/README.md`, seção "double check").
 - **Age-gate por loja**: confirmação de maioridade salva em
   `localStorage`, por tenant. Não é verificação documental de idade — é a
   prática mínima esperada nesse tipo de vitrine, não uma barreira legal
@@ -70,7 +80,7 @@ existir.
 cd intima-saas
 npm install
 cp .env.example .env.local   # preencher com um projeto Supabase próprio
-# aplicar supabase/migrations/0001_init.sql no projeto Supabase
+# aplicar supabase/migrations/0001_init.sql e 0002_infinitepay.sql, nessa ordem
 npm run dev
 ```
 
@@ -86,8 +96,13 @@ npm run dev
   plataforma): a tabela `plans` existe no schema, mas não há integração de
   cobrança recorrente nem enforcement de `max_products`/bloqueio por
   inadimplência.
-- **Gateway de pagamento real**: nenhuma processadora de verdade
-  integrada — decisão de negócio pendente (ver acima).
+- **Confirmação da política da InfinitePay para o nicho**: implementado
+  do jeito que foi pedido, mas ninguém confirmou com o suporte deles se
+  sexshop/moda íntima é aceito — ver `src/lib/payments/README.md`.
+- **Webhook testável só com URL pública**: em `localhost`, a InfinitePay
+  não consegue chamar `webhook_url` — para testar de verdade, usar algo
+  como túnel HTTPS (ngrok/cloudflared) apontando para o dev server, ou
+  testar direto em produção/staging.
 - **Categorias**: tabela e policy pública existem, mas não há tela no
   painel para criar/editar categoria — produto é cadastrado sem categoria
   por enquanto.
