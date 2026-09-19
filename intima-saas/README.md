@@ -50,6 +50,19 @@ existir.
   `localStorage`, por tenant. Não é verificação documental de idade — é a
   prática mínima esperada nesse tipo de vitrine, não uma barreira legal
   robusta.
+- **Auth do lojista via Supabase Auth + middleware** (`src/middleware.ts`):
+  toda rota `/admin/*` exige sessão, exceto `/admin/login` e
+  `/admin/signup`. Cadastro cria só o usuário; a criação da loja
+  (`tenant` + vínculo em `tenant_users`) acontece em `/api/onboarding`,
+  rodando com service role — é o único ponto que precisa bypassar RLS,
+  porque não existe policy de INSERT em `tenants`/`tenant_users` para o
+  usuário comum (de propósito: ninguém cria loja em nome de outro tenant
+  só mandando um `tenant_id` no corpo da requisição).
+- **CRUD de produto** (`/admin/produtos`) roda com o client autenticado por
+  cookie, não com service role — a policy `products scoped to tenant` já
+  garante isolamento, então insert/update/delete de um produto de outro
+  lojista simplesmente não afeta nenhuma linha, sem precisar checar
+  `tenant_id` manualmente no código da rota.
 
 ## Rodando localmente
 
@@ -63,19 +76,24 @@ npm run dev
 
 ## Gaps conhecidos (não construído ainda)
 
-- **Login/cadastro do lojista**: `/admin` assume sessão Supabase Auth já
-  existente; não há tela de login/signup nem fluxo de convite de equipe.
+- **Convite de equipe**: `tenant_users.role` já distingue `owner`/`staff`,
+  mas não há tela para o dono convidar mais gente da equipe — hoje só
+  quem faz o onboarding vira usuário do tenant.
+- **Um usuário, uma loja**: onboarding bloqueia criar uma segunda loja
+  para o mesmo usuário (`existingLink` em `/api/onboarding`). O schema
+  suportaria múltiplos tenants por usuário; a v1 não expõe isso.
 - **Cobrança da própria assinatura SaaS** (o lojista pagando a
   plataforma): a tabela `plans` existe no schema, mas não há integração de
   cobrança recorrente nem enforcement de `max_products`/bloqueio por
   inadimplência.
 - **Gateway de pagamento real**: nenhuma processadora de verdade
   integrada — decisão de negócio pendente (ver acima).
+- **Categorias**: tabela e policy pública existem, mas não há tela no
+  painel para criar/editar categoria — produto é cadastrado sem categoria
+  por enquanto.
 - **Frete e embalagem discreta**: coluna `discreet_packaging` existe no
   pedido, mas não há integração com transportadora (Melhor Envio é citado
   como usado no setor, mas não avaliado a fundo ainda).
-- **CRUD de produto no painel do lojista**: só existe leitura hoje
-  (`/admin`); cadastro/edição de produto ainda não tem tela.
 - **Sem testes automatizados.**
 
 ## Sobre "monetização rápida"
